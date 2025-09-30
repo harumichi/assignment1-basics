@@ -7,6 +7,7 @@ import logging
 import json
 import os
 from typing import Iterable, Dict, List, Tuple, Set
+from tqdm import tqdm
 
 import regex as re
 
@@ -203,6 +204,7 @@ class Tokenizer:
 			parts = [text]
 			special_set = set()
 
+		parts = tqdm(parts)
 		for part in parts:
 			if not part:
 				continue
