@@ -15,7 +15,7 @@ output_dir = "output/bpe/owt"
 begin_time = time.time()
 vocab, merges = run_train_bpe(
     input_path=input_path,
-    vocab_size=10000,
+    vocab_size=32000,
     special_tokens=["<|endoftext|>"],
 )
 end_time = time.time()
