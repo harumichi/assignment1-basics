@@ -6,12 +6,49 @@ from collections.abc import Iterable, Iterator as Iterator
 import logging
 import json
 import os
-from typing import Iterable, Dict, List, Tuple, Set
+from typing import Iterable, Dict, List, Tuple, Set, BinaryIO
 from tqdm import tqdm
 
 import regex as re
 
 logger = logging.getLogger(__name__)
+
+
+def find_chunk_boundaries(
+	file: BinaryIO,
+	desired_num_chunks: int,
+	split_special_tokens: list[bytes],
+) -> list[int]:
+	# Chunk the file into parts that can be counted independently. Supports multiple special tokens.
+	for t in split_special_tokens:
+		assert isinstance(t, bytes)
+	file.seek(0, os.SEEK_END)
+	file_size = file.tell()
+	file.seek(0)
+	if desired_num_chunks <= 0:
+		return [0, file_size]
+	chunk_size = max(1, file_size // desired_num_chunks)
+	chunk_boundaries = [i * chunk_size for i in range(desired_num_chunks + 1)]
+	chunk_boundaries[-1] = file_size
+	mini_chunk_size = 4096
+	needle_list = split_special_tokens if split_special_tokens else [b""]
+	for bi in range(1, len(chunk_boundaries) - 1):
+		initial_position = chunk_boundaries[bi]
+		file.seek(initial_position)
+		while True:
+			mini_chunk = file.read(mini_chunk_size)
+			if mini_chunk == b"":
+				chunk_boundaries[bi] = file_size
+				break
+			# find earliest occurrence among special tokens
+			found_positions = [mini_chunk.find(tok) for tok in needle_list if tok]
+			found_positions = [p for p in found_positions if p != -1]
+			if found_positions:
+				found_at = min(found_positions)
+				chunk_boundaries[bi] = initial_position + found_at
+				break
+			initial_position += mini_chunk_size
+	return sorted(set(chunk_boundaries))
 
 
 def split_with_special_tokens(text: str, special_tokens: list[str]) -> list[str]:
@@ -22,18 +59,23 @@ def split_with_special_tokens(text: str, special_tokens: list[str]) -> list[str]
 	return re.split(pattern, text)
 
 
-def pre_tokenize(text: str) -> list[bytes]:
+def pretokenize(text: str) -> list[bytes]:
 	PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 	return [s.encode() for s in re.findall(PAT, text)]
 
 
-def pretokenize_doc(args: tuple[str, Dict[bytes, int]]):
-	"""Worker: returns count_dict for one document (order ignored)."""
-	doc, token_idx = args
+def _chunk_worker(params: tuple[str | os.PathLike, int, int, list[str], Dict[bytes, int]]):
+	path, start, end, specials, token_idx_local = params
 	counts: Dict[Tuple[int, ...], int] = defaultdict(int)
-	for s in pre_tokenize(doc):
-		word = tuple(token_idx[bytes([b])] for b in s)
-		counts[word] += 1
+	with open(path, "rb") as fbin:
+		fbin.seek(start)
+		data = fbin.read(end - start).decode("utf-8", errors="ignore")
+	for piece in split_with_special_tokens(data, specials):
+		if not piece:
+			continue
+		for s in pretokenize(piece):
+			word = tuple(token_idx_local[bytes([b])] for b in s)
+			counts[word] += 1
 	return counts
 
 
@@ -56,18 +98,6 @@ def run_train_bpe(
 			vocab: dict mapping token id -> token bytes.
 			merges: ordered list of (left_token_bytes, right_token_bytes) for each merge performed.
 	"""
-	with open(input_path) as f:
-		text = f.read()
-	assert isinstance(text, str)
-	logger.info("Read %d characters from %s", len(text), input_path)
-
-	# Split on special tokens so they become their own atomic regions.
-	docs = split_with_special_tokens(text, special_tokens)
-	logger.info(
-		"Split input into %d documents by special tokens",
-		len(list(docs)) if not isinstance(docs, list) else len(docs),
-	)
-
 	# Build initial vocabulary: raw bytes 0..255 then special tokens.
 	token_idx: Dict[bytes, int] = {}
 	tokens: List[bytes] = []
@@ -84,11 +114,23 @@ def run_train_bpe(
 		add_token(t.encode())
 	logger.info("Added %d initial byte tokens and %d special tokens", 256, len(special_tokens))
 
-	# Parallel pre-tokenization & raw counts per document.
-	if not isinstance(docs, list):
-		docs = list(docs)
-	with mp.Pool(processes=max(1, mp.cpu_count() - 1)) as pool:
-		results = pool.map(pretokenize_doc, ((doc, token_idx) for doc in docs))
+	# Determine chunk boundaries; workers will read lazily.
+	n_procs = max(1, mp.cpu_count())
+	desired_num_chunks = n_procs * 64
+	with open(input_path, "rb") as fb:
+		boundaries = find_chunk_boundaries(
+			fb,
+			desired_num_chunks,
+			[t.encode() for t in special_tokens],
+		)
+	logger.info("Computed %d boundaries (producing %d chunks)", len(boundaries), len(boundaries) - 1)
+
+	worker_inputs = [
+		(input_path, s, e, special_tokens, token_idx)
+		for s, e in zip(boundaries[:-1], boundaries[1:])
+	]
+	with mp.Pool(processes=n_procs) as pool:
+		results = pool.map(_chunk_worker, worker_inputs)
 
 	# Merge counts. Order doesn't matter; sort for determinism.
 	raw_count: Dict[Tuple[int, ...], int] = defaultdict(int)
@@ -211,7 +253,7 @@ class Tokenizer:
 			if part in special_set:
 				result.append(self.token_idx[part.encode()])
 				continue
-			for x in pre_tokenize(part):
+			for x in pretokenize(part):
 				tokens = [self.token_idx[bytes([b])] for b in x]
 				while True:
 					candidates: list[tuple[int, tuple[int, int]]] = []
