@@ -249,7 +249,6 @@ class Tokenizer:
 			parts = [text]
 			special_set = set()
 
-		parts = tqdm(parts)
 		for part in parts:
 			if not part:
 				continue
