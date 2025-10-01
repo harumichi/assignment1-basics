@@ -155,6 +155,8 @@ def run_train_bpe(
 			pair_widx_set[pair].add(widx)
 
 	while len(token_idx) < vocab_size:
+		if len(token_idx) % 10 == 0:
+			logger.info("Vocabulary size %d / %d", len(token_idx), vocab_size)
 		if not pair_count:
 			break
 		pair = max(
