@@ -280,8 +280,12 @@ class Tokenizer:
 		return result
 
 	def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
-		for text in iterable:
-			yield from self.encode(text)
+		procs = max(1, mp.cpu_count())
+		with mp.Pool(processes=procs) as pool:
+			for i, encoded in enumerate(pool.imap(self.encode, iterable, 8)):
+				yield from encoded
+				if i % 100000 == 0:
+					logger.info("encode_iterable processed %d lines", i)
 
 	def decode(self, ids: list[int]) -> str:
 		return b"".join(self.vocab[i] for i in ids).decode("utf-8", errors="replace")
