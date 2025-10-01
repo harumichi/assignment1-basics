@@ -5,6 +5,7 @@ import multiprocessing as mp
 from collections.abc import Iterable, Iterator as Iterator
 import logging
 import json
+import pickle
 import os
 from typing import Iterable, Dict, List, Tuple, Set, BinaryIO
 from tqdm import tqdm
@@ -232,10 +233,10 @@ class Tokenizer:
 		merges_filepath: str,
 		special_tokens: list[str] | None = None,
 	):
-		with open(vocab_filepath) as fp:
-			vocab = json.load(fp)
-		with open(merges_filepath) as fp:
-			merges = json.load(fp)
+		with open(vocab_filepath, "rb") as fp:
+			vocab = pickle.load(fp)
+		with open(merges_filepath, "rb") as fp:
+			merges = pickle.load(fp)
 		return cls(vocab=vocab, merges=merges, special_tokens=special_tokens)
 
 	def encode(self, text: str) -> list[int]:
