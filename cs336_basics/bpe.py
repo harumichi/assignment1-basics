@@ -282,7 +282,7 @@ class Tokenizer:
 	def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
 		procs = max(1, mp.cpu_count())
 		with mp.Pool(processes=procs) as pool:
-			for i, encoded in enumerate(pool.imap(self.encode, iterable, 128)):
+			for i, encoded in enumerate(pool.imap(self.encode, iterable, 512)):
 				yield from encoded
 				if i % 100000 == 0:
 					logger.info("encode_iterable processed %d lines", i)
