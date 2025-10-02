@@ -10,7 +10,7 @@ from cs336_basics.bpe import Tokenizer
 logger = logging.getLogger(__name__)
 
 work_dir = "output/bpe/owt"
-names = ["owt_train", "owt_valid"]
+names = ["owt_valid", "owt_train"]
 
 begin_time = time.time()
 tokenizer = Tokenizer.from_files(

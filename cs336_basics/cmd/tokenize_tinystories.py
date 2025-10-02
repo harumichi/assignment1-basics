@@ -10,7 +10,7 @@ from cs336_basics.bpe import Tokenizer
 logger = logging.getLogger(__name__)
 
 work_dir = "output/bpe/tinystories"
-names = ["TinyStoriesV2-GPT4-train", "TinyStoriesV2-GPT4-valid"]
+names = ["TinyStoriesV2-GPT4-valid", "TinyStoriesV2-GPT4-train"]
 
 begin_time = time.time()
 tokenizer = Tokenizer.from_files(
