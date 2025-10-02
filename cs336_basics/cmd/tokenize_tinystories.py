@@ -24,9 +24,8 @@ for name in names:
     output_path = f"data/{name}.npy"
     with open(input_path, "r", encoding="utf-8") as fp:
         logger.info("File size: %.2f bytes", os.path.getsize(input_path))
-        ids = list(tokenizer.encode_iterable(fp))
-    logger.info("Number of tokens: %d", len(ids))
-    arr = np.array(ids, dtype=np.uint16)
+        arr = np.fromiter(tokenizer.encode_iterable(fp), dtype=np.uint16)
+    logger.info("Number of tokens: %d", len(arr))
     np.save(output_path, arr)
 end_time = time.time()
 
