@@ -11,7 +11,7 @@ valid_path = "data/TinyStoriesV2-GPT4-valid.npy"
 total_tokens = 327_680_000
 batch_size = 32
 context_length = 256
-max_steps = total_tokens / batch_size / context_length
+max_steps = total_tokens // batch_size // context_length
 
 args = dict(
     train_path=train_path,
