@@ -1,0 +1,215 @@
+import os
+from typing import BinaryIO, IO
+
+import numpy as np
+import numpy.typing as npt
+import torch
+from torch.utils.tensorboard import SummaryWriter
+
+from cs336_basics.nn import Transformer, cross_entropy
+from cs336_basics.optim import AdamW, get_lr_cosine_schedule, apply_gradient_clipping
+
+
+def get_batch(
+    dataset: npt.NDArray, batch_size: int, context_length: int, device: str,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    start_indices = np.random.randint(
+        0, len(dataset) - context_length, size=batch_size
+    )
+
+    input_batch = np.empty((batch_size, context_length), dtype=np.uint16)
+    target_batch = np.empty((batch_size, context_length), dtype=np.uint16)
+
+    for i, start_idx in enumerate(start_indices):
+        input_batch[i] = dataset[start_idx : start_idx + context_length]
+        target_batch[i] = dataset[start_idx + 1 : start_idx + context_length + 1]
+
+    input_tensor = torch.tensor(input_batch, dtype=torch.long).to(device)
+    target_tensor = torch.tensor(target_batch, dtype=torch.long).to(device)
+
+    return input_tensor, target_tensor
+
+
+def get_all_batches(
+    dataset: npt.NDArray, batch_size: int, context_length: int, device: str,
+):
+    num_batches = (len(dataset) - 1) // (batch_size * context_length)
+    if num_batches == 0:
+        return
+
+    for i in range(num_batches):
+        b = batch_size * context_length * i
+        e = batch_size * context_length * (i + 1)
+        input_batch = dataset[b:e].reshape(batch_size, context_length)
+        target_batch = dataset[b + 1 : e + 1].reshape(batch_size, context_length)
+        yield (
+            torch.tensor(input_batch, dtype=torch.long, device=device),
+            torch.tensor(target_batch, dtype=torch.long, device=device),
+        )
+
+
+def save_checkpoint(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    iteration: int,
+    out: str | os.PathLike | BinaryIO | IO[bytes],
+) -> None:
+    checkpoint = {
+        "model": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "iteration": iteration,
+    }
+    torch.save(checkpoint, out)
+
+
+def load_checkpoint(
+    src: str | os.PathLike | BinaryIO | IO[bytes],
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+) -> int:
+    checkpoint = torch.load(src, weights_only=False)
+    model.load_state_dict(checkpoint["model"])
+    optimizer.load_state_dict(checkpoint["optimizer"])
+    return checkpoint["iteration"]
+
+
+def validate(
+    *,
+    model: torch.nn.Module,
+    dataset: npt.NDArray,
+    batch_size: int,
+    context_length: int,
+    device: str,
+):
+    model.eval()
+    with torch.no_grad():
+        total_loss = 0.0
+        total_tokens = 0
+        for input_batch, target_batch in get_all_batches(
+            dataset=dataset,
+            batch_size=batch_size,
+            context_length=context_length,
+            device=device,
+        ):
+            logits = model(input_batch)
+            loss = cross_entropy(logits, target_batch, reduction='sum')
+            total_loss += loss.item()
+            total_tokens += input_batch.numel()
+        avg_loss = total_loss / total_tokens
+        ppl = np.exp(avg_loss)
+        return avg_loss, ppl
+
+
+def train(
+    *,
+    train_path: str,
+    valid_path: str,
+    # training loop
+    batch_size: int,
+    vocab_size: int,
+    context_length: int,
+    max_steps: int,
+    eval_interval: int,
+    # optimization
+    lr: float,
+    weight_decay: float,
+    betas: tuple[float, float],
+    lr_cosine_schedule: dict | None,
+    gradient_clipping: dict | None,
+    # model parameter
+    d_model: int,
+    d_ff: int,
+    num_layers: int,
+    num_heads: int,
+    rope_theta: float,
+    # tensorboard
+    tensorboard_dir: str,
+    # checkpointing
+    save_checkpoint_path: str | os.PathLike | BinaryIO | IO[bytes] | None = None,
+    load_checkpoint_path: str | os.PathLike | BinaryIO | IO[bytes] | None = None,
+):
+    writer = SummaryWriter(tensorboard_dir)
+
+    train_dataset = np.load(train_path, mmap_mode="r")
+    valid_dataset = np.load(valid_path, mmap_mode="r")
+
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        device = "cpu"
+    model = Transformer(
+        vocab_size=vocab_size,
+        context_length=context_length,
+        d_model=d_model,
+        d_ff=d_ff,
+        num_layers=num_layers,
+        num_heads=num_heads,
+        rope_theta=rope_theta,
+    ).to(device)
+    optimizer = AdamW(
+        model.parameters(),
+        lr=lr,
+        weight_decay=weight_decay,
+        betas=betas,
+    )
+    if lr_cosine_schedule is not None:
+        lr_scheduler = lambda lr, step: get_lr_cosine_schedule(
+            t=step,
+            lr_max=lr,
+            lr_min=lr_cosine_schedule.get("lr_min", 0.0),
+            t_warmup=lr_cosine_schedule["t_warmup"],
+            t_cycle=lr_cosine_schedule["t_cycle"],
+        )
+    else:
+        lr_scheduler = lambda lr, step: lr
+
+    initial_step = 0
+    if load_checkpoint_path is not None:
+        initial_step = load_checkpoint(
+            load_checkpoint_path, model=model, optimizer=optimizer
+        )
+
+    for i in range(max_steps - initial_step):
+        step = initial_step + i + 1
+
+        new_lr = lr_scheduler(lr, step)
+        for pg in optimizer.param_groups:
+            pg["lr"] = new_lr
+
+        model.train()
+        input_batch, target_batch = get_batch(
+            dataset=train_dataset,
+            batch_size=batch_size,
+            context_length=context_length,
+            device=device,
+        )
+        optimizer.zero_grad()
+        logits = model(input_batch)
+        loss = cross_entropy(logits, target_batch)
+        loss.backward()
+        if gradient_clipping is not None:
+            apply_gradient_clipping(model.parameters(), gradient_clipping["max_l2_norm"])
+        optimizer.step()
+
+        if step % eval_interval == 0:
+            valid_loss, valid_ppl = validate(
+                model=model,
+                dataset=valid_dataset,
+                batch_size=batch_size,
+                context_length=context_length,
+                device=device,
+            )
+            writer.add_scalar("valid/loss", valid_loss, step)
+            writer.add_scalar("valid/ppl", valid_ppl, step)
+            if save_checkpoint_path is not None:
+                save_checkpoint(
+                    model=model,
+                    optimizer=optimizer,
+                    iteration=step,
+                    out=save_checkpoint_path,
+                )
+
+    writer.flush()
+    writer.close()
