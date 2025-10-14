@@ -1,5 +1,7 @@
 import os
 from typing import BinaryIO, IO
+import logging
+from datetime import datetime
 
 import numpy as np
 import numpy.typing as npt
@@ -10,24 +12,20 @@ from cs336_basics.nn import Transformer, cross_entropy
 from cs336_basics.optim import AdamW, get_lr_cosine_schedule, apply_gradient_clipping
 
 
+logger = logging.getLogger(__name__)
+
+
 def get_batch(
     dataset: npt.NDArray, batch_size: int, context_length: int, device: str,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    start_indices = np.random.randint(
-        0, len(dataset) - context_length, size=batch_size
-    )
-
-    input_batch = np.empty((batch_size, context_length), dtype=np.uint16)
-    target_batch = np.empty((batch_size, context_length), dtype=np.uint16)
-
-    for i, start_idx in enumerate(start_indices):
-        input_batch[i] = dataset[start_idx : start_idx + context_length]
-        target_batch[i] = dataset[start_idx + 1 : start_idx + context_length + 1]
-
-    input_tensor = torch.tensor(input_batch, dtype=torch.long).to(device)
-    target_tensor = torch.tensor(target_batch, dtype=torch.long).to(device)
-
-    return input_tensor, target_tensor
+    starts = np.random.randint(0, len(dataset) - context_length, size=batch_size)
+    # 2D indices: (B, T)
+    idx = starts[:, None] + np.arange(context_length)
+    inputs = dataset[idx]
+    targets = dataset[idx + 1]
+    inputs = torch.from_numpy(inputs).to(device, dtype=torch.long)
+    targets = torch.from_numpy(targets).to(device, dtype=torch.long)
+    return inputs, targets
 
 
 def get_all_batches(
@@ -124,11 +122,15 @@ def train(
     rope_theta: float,
     # tensorboard
     tensorboard_dir: str,
+    run_name: str | None = None,
     # checkpointing
     save_checkpoint_path: str | os.PathLike | BinaryIO | IO[bytes] | None = None,
     load_checkpoint_path: str | os.PathLike | BinaryIO | IO[bytes] | None = None,
 ):
-    writer = SummaryWriter(tensorboard_dir)
+    if run_name is None:
+        run_name = datetime.now().strftime("%Y%m%d%H%M%S")
+    logger.info(f"run_name: {run_name}")
+    writer = SummaryWriter(os.path.join(tensorboard_dir, run_name))
 
     train_dataset = np.load(train_path, mmap_mode="r")
     valid_dataset = np.load(valid_path, mmap_mode="r")
@@ -139,6 +141,7 @@ def train(
         device = "mps"
     else:
         device = "cpu"
+    logger.info(f"device: {device}")
     model = Transformer(
         vocab_size=vocab_size,
         context_length=context_length,
@@ -148,6 +151,7 @@ def train(
         num_heads=num_heads,
         rope_theta=rope_theta,
     ).to(device)
+    logger.info("model: %s", model)
     optimizer = AdamW(
         model.parameters(),
         lr=lr,
@@ -171,6 +175,7 @@ def train(
             load_checkpoint_path, model=model, optimizer=optimizer
         )
 
+    logger.info(f"training start from step {initial_step} to {max_steps}")
     for i in range(max_steps - initial_step):
         step = initial_step + i + 1
 
@@ -201,6 +206,7 @@ def train(
                 context_length=context_length,
                 device=device,
             )
+            logger.info(f"step {step}: valid loss {valid_loss:.4f}, valid ppl {valid_ppl:.4f}")
             writer.add_scalar("valid/loss", valid_loss, step)
             writer.add_scalar("valid/ppl", valid_ppl, step)
             if save_checkpoint_path is not None:
