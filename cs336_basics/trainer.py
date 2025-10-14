@@ -1,5 +1,6 @@
 import os
 from typing import BinaryIO, IO
+import logging
 
 import numpy as np
 import numpy.typing as npt
@@ -8,6 +9,9 @@ from torch.utils.tensorboard import SummaryWriter
 
 from cs336_basics.nn import Transformer, cross_entropy
 from cs336_basics.optim import AdamW, get_lr_cosine_schedule, apply_gradient_clipping
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_batch(
@@ -201,6 +205,7 @@ def train(
                 context_length=context_length,
                 device=device,
             )
+            logger.info(f"step {step}: valid loss {valid_loss:.4f}, valid ppl {valid_ppl:.4f}")
             writer.add_scalar("valid/loss", valid_loss, step)
             writer.add_scalar("valid/ppl", valid_ppl, step)
             if save_checkpoint_path is not None:
