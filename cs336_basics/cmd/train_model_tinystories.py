@@ -22,7 +22,7 @@ args = dict(
     vocab_size=10000,
     context_length=context_length,
     max_steps=max_steps,
-    eval_interval=100,
+    eval_interval=1000,
     # optimization
     lr=1e-3,
     weight_decay=0.01,

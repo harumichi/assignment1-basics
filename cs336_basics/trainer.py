@@ -18,21 +18,14 @@ logger = logging.getLogger(__name__)
 def get_batch(
     dataset: npt.NDArray, batch_size: int, context_length: int, device: str,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    start_indices = np.random.randint(
-        0, len(dataset) - context_length, size=batch_size
-    )
-
-    input_batch = np.empty((batch_size, context_length), dtype=np.uint16)
-    target_batch = np.empty((batch_size, context_length), dtype=np.uint16)
-
-    for i, start_idx in enumerate(start_indices):
-        input_batch[i] = dataset[start_idx : start_idx + context_length]
-        target_batch[i] = dataset[start_idx + 1 : start_idx + context_length + 1]
-
-    input_tensor = torch.tensor(input_batch, dtype=torch.long).to(device)
-    target_tensor = torch.tensor(target_batch, dtype=torch.long).to(device)
-
-    return input_tensor, target_tensor
+    starts = np.random.randint(0, len(dataset) - context_length, size=batch_size)
+    # 2D indices: (B, T)
+    idx = starts[:, None] + np.arange(context_length)
+    inputs = dataset[idx]
+    targets = dataset[idx + 1]
+    inputs = torch.from_numpy(inputs).to(device, dtype=torch.long)
+    targets = torch.from_numpy(targets).to(device, dtype=torch.long)
+    return inputs, targets
 
 
 def get_all_batches(
@@ -136,6 +129,7 @@ def train(
 ):
     if run_name is None:
         run_name = datetime.now().strftime("%Y%m%d%H%M%S")
+    logger.info(f"run_name: {run_name}")
     writer = SummaryWriter(os.path.join(tensorboard_dir, run_name))
 
     train_dataset = np.load(train_path, mmap_mode="r")
