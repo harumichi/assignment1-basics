@@ -12,13 +12,13 @@ logger = logging.getLogger(__name__)
 input_path = "data/TinyStoriesV2-GPT4-train.txt"
 output_dir = "output/bpe/tinystories"
 
-begin_time = time.time()
+begin_time = time.perf_counter()
 vocab, merges = run_train_bpe(
     input_path=input_path,
     vocab_size=10000,
     special_tokens=["<|endoftext|>"],
 )
-end_time = time.time()
+end_time = time.perf_counter()
 
 logger.info("BPE training elapsed time: %.2f s", end_time - begin_time)
 

@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 train_path = "data/dummy_train.npy"
 valid_path = "data/dummy_valid.npy"
 
-begin_time = time.time()
+begin_time = time.perf_counter()
 train(
     train_path=train_path,
     valid_path=valid_path,
@@ -36,6 +36,6 @@ train(
     load_checkpoint_path=None,
     wandb_args={"name": "debug-train-model"},
 )
-end_time = time.time()
+end_time = time.perf_counter()
 
 logger.info("Training elapsed time: %.2f s", end_time - begin_time)

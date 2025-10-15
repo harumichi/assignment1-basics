@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 work_dir = "output/bpe/tinystories"
 names = ["TinyStoriesV2-GPT4-valid", "TinyStoriesV2-GPT4-train"]
 
-begin_time = time.time()
+begin_time = time.perf_counter()
 tokenizer = Tokenizer.from_files(
     vocab_filepath=os.path.join(work_dir, "vocab.pkl"),
     merges_filepath=os.path.join(work_dir, "merges.pkl"),
@@ -27,6 +27,6 @@ for name in names:
         arr = np.fromiter(tokenizer.encode_iterable(fp), dtype=np.uint16)
     logger.info("Number of tokens: %d", len(arr))
     np.save(output_path, arr)
-end_time = time.time()
+end_time = time.perf_counter()
 
 logger.info("Tokenization elapsed time: %.2f s", end_time - begin_time)
