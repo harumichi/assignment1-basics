@@ -12,7 +12,7 @@ valid_path = "data/TinyStoriesV2-GPT4-valid.npy"
 total_tokens = 327_680_000
 context_length = 256
 
-batch_size_list = []
+batch_size_list = [8, 32, 128]
 for batch_size in batch_size_list:
     logger.info(f"Training with batch_size: {batch_size}")
     run_name = 'tinystories/sweep_batch_size_' + str(batch_size)
