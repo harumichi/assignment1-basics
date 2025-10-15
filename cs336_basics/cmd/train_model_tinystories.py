@@ -13,6 +13,7 @@ total_tokens = 327_680_000
 batch_size = 32
 context_length = 256
 max_steps = total_tokens // batch_size // context_length
+run_name = 'tinystories/baseline'
 
 args = dict(
     train_path=train_path,
@@ -37,10 +38,10 @@ args = dict(
     rope_theta=10000.0,
     # tensorboard
     tensorboard_dir=f"{os.getcwd()}/tensorboard",
+    run_name=run_name,
     # checkpointing
     save_checkpoint_path=None,
     load_checkpoint_path=None,
-
 )
 logger.info("Training with args: %s", args)
 
