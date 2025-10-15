@@ -206,9 +206,9 @@ def train(
                 context_length=context_length,
                 device=device,
             )
-            logger.info(f"step {step}: valid loss {valid_loss:.4f}, valid ppl {valid_ppl:.4f}")
-            writer.add_scalar("valid/loss", valid_loss, step)
-            writer.add_scalar("valid/ppl", valid_ppl, step)
+            logger.info(f"steps: {step}, tokens: {step * batch_size * context_length}, valid loss: {valid_loss:.4f}")
+            writer.add_scalar("valid/loss", valid_loss, step * batch_size * context_length)
+            writer.add_scalar("valid/ppl", valid_ppl, step * batch_size * context_length)
             if save_checkpoint_path is not None:
                 save_checkpoint(
                     model=model,
