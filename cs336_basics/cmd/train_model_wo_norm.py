@@ -25,7 +25,7 @@ total_tokens = 327_680_000
 batch_size = 32
 context_length = 256
 max_steps = total_tokens // batch_size // context_length
-run_name = 'tinystories/wo_norm'
+run_name = 'tinystories/wo_norm_small_lr'
 
 args = dict(
     train_path=train_path,
@@ -37,7 +37,7 @@ args = dict(
     max_steps=max_steps,
     eval_interval=1000,
     # optimization
-    lr=1e-3,
+    lr=1e-4,
     weight_decay=0.01,
     betas=(0.9, 0.999),
     lr_cosine_schedule=None,
