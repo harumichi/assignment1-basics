@@ -1,6 +1,7 @@
 import os
 from typing import BinaryIO, IO
 import logging
+from datetime import datetime
 
 import numpy as np
 import numpy.typing as npt
@@ -128,11 +129,14 @@ def train(
     rope_theta: float,
     # tensorboard
     tensorboard_dir: str,
+    run_name: str | None = None,
     # checkpointing
     save_checkpoint_path: str | os.PathLike | BinaryIO | IO[bytes] | None = None,
     load_checkpoint_path: str | os.PathLike | BinaryIO | IO[bytes] | None = None,
 ):
-    writer = SummaryWriter(tensorboard_dir)
+    if run_name is None:
+        run_name = datetime.now().strftime("%Y%m%d%H%M%S")
+    writer = SummaryWriter(os.path.join(tensorboard_dir, run_name))
 
     train_dataset = np.load(train_path, mmap_mode="r")
     valid_dataset = np.load(valid_path, mmap_mode="r")
