@@ -14,7 +14,8 @@ batch_size = 32
 context_length = 256
 max_steps = total_tokens // batch_size // context_length
 
-lr_list = [1e-4, 1e-3, 1e-2, 1e-1]
+# lr_list = [1e-4, 1e-3, 1e-2]
+lr_list = [3e-3]
 for lr in lr_list:
     logger.info(f"Training with lr: {lr}")
     run_name = 'tinystories/sweep_lr_' + str(lr)
