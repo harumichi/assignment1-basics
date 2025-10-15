@@ -1,4 +1,5 @@
 import time
+import os
 import logging
 
 import cs336_basics  # triggers logging configuration in package __init__
@@ -35,7 +36,7 @@ args = dict(
     num_heads=16,
     rope_theta=10000.0,
     # tensorboard
-    tensorboard_dir="output/tensorboard",
+    tensorboard_dir=f"{os.getcwd()}/tensorboard",
     # checkpointing
     save_checkpoint_path=None,
     load_checkpoint_path=None,
@@ -44,5 +45,4 @@ args = dict(
 logger.info("Training with args: %s", args)
 
 train(**args)
-
-logger.info("Training elapsed time: %.2f s", end_time - begin_time)
+logger.info("Training finished.")

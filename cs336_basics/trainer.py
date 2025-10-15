@@ -143,6 +143,7 @@ def train(
         device = "mps"
     else:
         device = "cpu"
+    logger.info(f"device: {device}")
     model = Transformer(
         vocab_size=vocab_size,
         context_length=context_length,
@@ -152,6 +153,7 @@ def train(
         num_heads=num_heads,
         rope_theta=rope_theta,
     ).to(device)
+    logger.info("model: %s", model)
     optimizer = AdamW(
         model.parameters(),
         lr=lr,
@@ -175,6 +177,7 @@ def train(
             load_checkpoint_path, model=model, optimizer=optimizer
         )
 
+    logger.info(f"training start from step {initial_step} to {max_steps}")
     for i in range(max_steps - initial_step):
         step = initial_step + i + 1
 
