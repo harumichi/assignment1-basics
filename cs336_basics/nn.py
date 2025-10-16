@@ -200,8 +200,8 @@ class TransformerBlock(nn.Module):
     def __init__(
         self,
         d_model: int,
-        num_heads: int,
         d_ff: int,
+        num_heads: int,
         max_seq_len: int | None = None,
         theta: float | None = None,
         device=None,
@@ -245,9 +245,9 @@ class Transformer(nn.Module):
         vocab_size: int,
         context_length: int,
         d_model: int,
+        d_ff: int,
         num_layers: int,
         num_heads: int,
-        d_ff: int,
         rope_theta: float | None = None,
     ):
         super().__init__()
@@ -257,8 +257,8 @@ class Transformer(nn.Module):
             self.layers.append(
                 TransformerBlock(
                     d_model=d_model,
-                    num_heads=num_heads,
                     d_ff=d_ff,
+                    num_heads=num_heads,
                     max_seq_len=context_length,
                     theta=rope_theta,
                 )
